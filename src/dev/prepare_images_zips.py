@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from const import (
+from src.const import (
     ID_COLUMN,
     IMAGE_ID_SUFFIX,
     IMPROVED_SUFFIX,

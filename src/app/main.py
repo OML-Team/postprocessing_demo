@@ -1,29 +1,18 @@
 from collections import defaultdict
 from typing import Dict, Union
 
-import cv2
 import streamlit as st
+from controls import GalleryViewer, QueryViewer, show_query, show_retrieval_results
 
-from const import (
-    BORDER_SIZE,
+from data import QueryDataset, load_gallery_dataset, load_query_dataset
+from src.const import (
     DATASETS,
-    GREEN_COLOR,
     IMPROVED_SUFFIX,
     METRICS_TO_EXCLUDE_FROM_VIEWER,
-    SIZE,
     TOP_K,
     ImprovementFlags,
     RetrievalResultsType,
 )
-from controls import GalleryViewer, QueryViewer
-from data import (
-    GalleryDataset,
-    QueryDataset,
-    QuerySample,
-    load_gallery_dataset,
-    load_query_dataset,
-)
-from utils import pad_image_to_square
 
 st.set_page_config(layout="wide", page_title="similarity-api")
 
@@ -109,14 +98,9 @@ def download_datasets(datasets: Dict[str, Dict[str, Dict[str, str]]]) -> Dict[st
     return output
 
 
-def show_query(query_viewer: QueryViewer, sample: QuerySample) -> None:
-    image = sample.load_image()
-    image = pad_image_to_square(image, SIZE, BORDER_SIZE)
-    info: Dict[str, str] = {"Label": str(sample.label), "Category": sample.category}
-    query_viewer.show(image, info)
-
-
 def set_session_state(dataset_name: str, category_name: str, filter_by: str, improvement_flag: str):
+    """Set session state in order to keep track of a current query image number. Changing dataset,
+    category or filter settings resets current query number to 0."""
     if "query_controller_position" not in st.session_state:
         st.session_state.query_controller_position = 0
     if "dataset_name" not in st.session_state:
@@ -140,40 +124,6 @@ def set_session_state(dataset_name: str, category_name: str, filter_by: str, imp
     if st.session_state.improvement_flag != improvement_flag:
         st.session_state.improvement_flag = improvement_flag
         st.session_state.query_controller_position = 0
-
-
-def show_retrieval_results(
-    viewer: GalleryViewer, sample: QuerySample, gallery_dataset: GalleryDataset, matching_type: RetrievalResultsType
-):
-    images = []
-    top_k_images_ids = (
-        sample.top_k_images_ids
-        if matching_type == RetrievalResultsType.before_stir
-        else sample.postprocessed_top_k_images_ids
-    )
-    top_k_scores = (
-        sample.top_k_scores if matching_type == RetrievalResultsType.before_stir else sample.postprocessed_top_k_scores
-    )
-    infos = []
-    for image_id, score in zip(top_k_images_ids, top_k_scores):
-        gallery_sample = gallery_dataset.find_by_id(image_id)
-        image = gallery_sample.load_image()
-        if gallery_sample.label == sample.label:
-            image = pad_image_to_square(image, SIZE - BORDER_SIZE)
-            image = cv2.copyMakeBorder(
-                image, BORDER_SIZE, BORDER_SIZE, BORDER_SIZE, BORDER_SIZE, cv2.BORDER_CONSTANT, value=GREEN_COLOR
-            )
-        else:
-            image = pad_image_to_square(image, SIZE)
-        images.append(image)
-        infos.append(
-            {
-                "Label": gallery_sample.label,
-                "Category": gallery_sample.category,
-                "Distance": score,
-            }
-        )
-    viewer.show(images, infos)
 
 
 def get_filter_options(dataset: QueryDataset) -> Dict[str, Union[None, str]]:

@@ -1,6 +1,4 @@
 import argparse
-import itertools
-from pathlib import Path
 from typing import Any, List
 
 import numpy as np
@@ -17,7 +15,6 @@ from oml.const import (
 )
 from oml.functional.metrics import apply_mask_to_ignore, calc_cmc, calc_map
 from oml.inference.flat import inference_on_images
-from oml.inference.pairs import pairwise_inference_on_images
 from oml.interfaces.retrieval import IDistancesPostprocessor
 from oml.registry.models import get_extractor_by_cfg
 from oml.registry.postprocessors import get_postprocessor_by_cfg
@@ -25,7 +22,7 @@ from oml.registry.transforms import get_transforms_by_cfg
 from oml.utils.misc_torch import assign_2d
 from sklearn.neighbors import NearestNeighbors
 
-from const import (
+from src.const import (
     CMC_IMPROVED_COLUMN_TEMPLATE,
     CMC_TOP_K_COLUMN_TEMPLATE,
     ID_COLUMN,
@@ -90,7 +87,8 @@ def main():
         args.embeddings_filepath,
         embeddings=embeddings,
     )
-    # data = np.load("data/SOP/embeddings.npz")
+    # data = np.load(args.embeddings_filepath)
+    # data = np.load('data/InShop/backup 2023-03-20/embeddings.npz')
     # embeddings = data["embeddings"]
     # is_query = data["is_query"]
     # is_gallery = data["is_gallery"]
@@ -107,8 +105,8 @@ def main():
         args.cmc_top_ks,
         args.map_top_ks,
     )
-    gallery_df.to_csv(args.gallery_df)
-    query_df.to_csv(args.query_df)
+    gallery_df.to_csv(args.gallery_df, index=None)
+    query_df.to_csv(args.query_df, index=None)
 
 
 def eval_dataframe(
@@ -121,22 +119,23 @@ def eval_dataframe(
     map_top_ks: List[int],
 ):
     is_gallery = (df[IS_GALLERY_COLUMN] == 1).to_numpy()
-    is_query = (df[IS_QUERY_COLUMN] == 1).to_numpy()
     gallery_ids = df.index[is_gallery].to_numpy()
     gallery_labels = df[is_gallery][LABELS_COLUMN].to_numpy()
-    query_ids = df.index[is_query].to_numpy()
-    query_labels = df[is_query][LABELS_COLUMN].to_numpy()
     gallery_paths = df[is_gallery][PATHS_COLUMN].to_numpy()
-    query_paths = df[is_query][PATHS_COLUMN].tolist()
     gallery_df = pd.DataFrame(columns=[ID_COLUMN, PATHS_COLUMN, CATEGORIES_COLUMN, LABELS_COLUMN])
     gallery_df[ID_COLUMN] = gallery_ids
     gallery_df[PATHS_COLUMN] = gallery_paths
-    gallery_df[CATEGORIES_COLUMN] = df[is_gallery][CATEGORIES_COLUMN]
+    gallery_df[CATEGORIES_COLUMN] = df[is_gallery][CATEGORIES_COLUMN].to_numpy()
     gallery_df[LABELS_COLUMN] = gallery_labels
+
+    is_query = (df[IS_QUERY_COLUMN] == 1).to_numpy()
+    query_ids = df.index[is_query].to_numpy()
+    query_labels = df[is_query][LABELS_COLUMN].to_numpy()
+    query_paths = df[is_query][PATHS_COLUMN].to_numpy()
 
     knn = NearestNeighbors()
     knn.fit(embeddings[is_gallery, :])
-    distances, ii_top = knn.kneighbors(embeddings[is_query, :], n_neighbors=max_top_k + 1)
+    distances, ii_top = knn.kneighbors(embeddings[is_query, :], n_neighbors=max_top_k + 1, return_distance=True)
     distances = torch.from_numpy(distances)
     mask_gt = torch.from_numpy(gallery_labels[ii_top] == query_labels[:, np.newaxis])
     # it is done like that in order to prevent OOM for huge datasets
@@ -150,9 +149,9 @@ def eval_dataframe(
 
     query_df = pd.DataFrame()
     query_df[ID_COLUMN] = df.index[is_query].to_numpy()
-    query_df[PATHS_COLUMN] = df[is_query][PATHS_COLUMN]
-    query_df[LABELS_COLUMN] = df[is_query][LABELS_COLUMN]
-    query_df[CATEGORIES_COLUMN] = df[is_query][CATEGORIES_COLUMN]
+    query_df[PATHS_COLUMN] = df[is_query][PATHS_COLUMN].to_numpy()
+    query_df[LABELS_COLUMN] = df[is_query][LABELS_COLUMN].to_numpy()
+    query_df[CATEGORIES_COLUMN] = df[is_query][CATEGORIES_COLUMN].to_numpy()
 
     cmc_before, map_before = eval_metrics(
         query_df,
@@ -168,11 +167,12 @@ def eval_dataframe(
         TOP_K_IMAGE_ID_COLUMN_TEMPLATE,
         CMC_TOP_K_COLUMN_TEMPLATE,
         MAP_TOP_K_COLUMN_TEMPLATE,
+        gallery_labels,
+        query_labels,
     )
 
     with torch.no_grad():
         _ii_top = torch.from_numpy(ii_top[:, : postprocessor.top_n]).contiguous()
-        _ii_top = torch.repeat_interleave(torch.arange(0, postprocessor.top_n).view(1, -1), distances.shape[0], dim=0)
         distances = process(postprocessor, distances, _ii_top, query_paths, gallery_paths)
     cmc_after, map_after = eval_metrics(
         query_df,
@@ -188,6 +188,8 @@ def eval_dataframe(
         POSTPROCESSED_TOP_K_IMAGE_ID_COLUMN_TEMPLATE,
         POSTPROCESSED_CMC_TOP_K_COLUMN_TEMPLATE,
         POSTPROCESSED_MAP_TOP_K_COLUMN_TEMPLATE,
+        gallery_labels,
+        query_labels,
     )
 
     for column_name_template, metric_before_stir, metric_after_stir, top_ks in [
@@ -196,8 +198,8 @@ def eval_dataframe(
     ]:
         for m, mp, k in zip(metric_before_stir, metric_after_stir, top_ks):
             query_df[column_name_template % k] = WITHOUT_CHANGE_FLAG_VALUE
-            query_df[(m > mp).cpu().numpy()] = IMPROVEMENT_FLAG_VALUE
-            query_df[(m < mp).cpu().numpy()] = WORSENING_FLAG_VALUE
+            query_df.loc[(m < mp).cpu().numpy(), column_name_template % k] = IMPROVEMENT_FLAG_VALUE
+            query_df.loc[(m > mp).cpu().numpy(), column_name_template % k] = WORSENING_FLAG_VALUE
     return query_df, gallery_df
 
 
@@ -215,6 +217,8 @@ def eval_metrics(
     top_k_image_id_column_template,
     cmc_column_template,
     map_column_template,
+    gallery_labels,
+    query_labels,
 ):
     sort_inds = torch.argsort(distances, dim=1)
     distances = torch.take_along_dim(distances, sort_inds, dim=1)
@@ -263,29 +267,10 @@ def process(
         # Thus, we don't need to care about order and offset at all.
         pass
 
-    distances = assign_2d(x=distances, indices=ii_top, new_values=distances_upd)
+    _ii_top = torch.repeat_interleave(torch.arange(0, postprocessor.top_n).view(1, -1), distances.shape[0], dim=0)
+    distances = assign_2d(x=distances, indices=_ii_top, new_values=distances_upd)
 
     return distances
-
-
-def inference(
-    postprocessor, queries: List[Path], galleries: List[Path], ii_top: torch.Tensor, top_n: int
-) -> torch.Tensor:
-    n_queries = len(queries)
-    queries = list(itertools.chain.from_iterable(itertools.repeat(x, top_n) for x in queries))
-    galleries = [galleries[i] for i in ii_top.view(-1)]
-    distances_upd = pairwise_inference_on_images(
-        model=postprocessor.model,
-        paths1=queries,
-        paths2=galleries,
-        transform=postprocessor.image_transforms,
-        num_workers=postprocessor.num_workers,
-        batch_size=postprocessor.batch_size,
-        verbose=postprocessor.verbose,
-        use_fp16=postprocessor.use_fp16,
-    )
-    distances_upd = distances_upd.view(n_queries, top_n)
-    return distances_upd
 
 
 if __name__ == "__main__":

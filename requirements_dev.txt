@@ -1,0 +1,11 @@
+open-metric-learning
+pandas~=1.5.2
+streamlit~=1.18.1
+numpy~=1.23.0
+tqdm~=4.64.1
+
+Pillow~=9.4.0
+
+torch~=1.13.0
+omegaconf~=2.2.3
+scikit-learn~=1.2.2

@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 from PIL import Image
 
-from const import (
+from src.const import (
     CATEGORIES_COLUMN,
     ID_COLUMN,
     LABELS_COLUMN,

@@ -1,7 +1,7 @@
 import cv2
 import requests
 
-from const import WHITE_COLOR
+from src.const import WHITE_COLOR
 
 
 def pad_image_to_square(image, size, border_size=0, color=WHITE_COLOR):
