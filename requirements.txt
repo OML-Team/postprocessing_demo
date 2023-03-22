@@ -1,5 +1,5 @@
 gdown
-opencv-python~=4.7.0.68
+opencv-python-headless
 pandas~=1.5.2
 streamlit~=1.18.1
 numpy~=1.23.0
