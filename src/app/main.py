@@ -1,3 +1,8 @@
+# flake8: noqa
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).parent.parent.parent))
 from collections import defaultdict
 from typing import Dict, Union
 
