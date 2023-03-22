@@ -3,18 +3,18 @@ from pathlib import Path
 from typing import Union
 
 DATASETS = {
-    # "Stanford Online Products": {
-    #     "gdrive_ids": {
-    #         "query": "1vZYr2y0IMDDjOyLTAk1j2mAVN74yBxOq",
-    #         "gallery": "1YGQ2TKM8NTWXdsAurKN5EYi9_BvXcXzz",
-    #         "zip": "1KrJOVjKqupG8rEG8-cmfRHCg3If9ABUH",
-    #     },
-    #     "local_paths": {
-    #         "query": "tmp/data/SOP/filtered_query_df.csv",
-    #         "gallery": "tmp/data/SOP/filtered_gallery_df.csv",
-    #         "zip": "tmp/data/SOP/SOP_images.zip",
-    #     },
-    # },
+    "Stanford Online Products": {
+        "gdrive_ids": {
+            "query": "1vZYr2y0IMDDjOyLTAk1j2mAVN74yBxOq",
+            "gallery": "1YGQ2TKM8NTWXdsAurKN5EYi9_BvXcXzz",
+            "zip": "1KrJOVjKqupG8rEG8-cmfRHCg3If9ABUH",
+        },
+        "local_paths": {
+            "query": "tmp/data/SOP/filtered_query_df.csv",
+            "gallery": "tmp/data/SOP/filtered_gallery_df.csv",
+            "zip": "tmp/data/SOP/SOP_images.zip",
+        },
+    },
     "DeepFashion InShop": {
         "gdrive_ids": {
             "query": "1ipcsWWvGEsHwr65m2UHmXSik6a1KRDjm",
